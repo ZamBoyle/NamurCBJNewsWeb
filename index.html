@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CBJ 2026 - Namur</title>
+<style>
+:root {
+  --primary: #1565c0;
+  --primary-light: #e3f2fd;
+  --primary-dark: #0d47a1;
+  --namur-bg: #e8f5e9;
+  --namur-color: #2e7d32;
+  --surface: #fff;
+  --bg: #f5f5f5;
+  --text: #212121;
+  --text-secondary: #757575;
+  --border: #e0e0e0;
+  --live-bg: #fff3e0;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); }
+.header { background: var(--primary); color: white; padding: 12px 16px; text-align: center; }
+.header h1 { font-size: 1.2rem; }
+.header small { opacity: 0.8; font-size: 0.8rem; }
+.tabs { display: flex; background: var(--surface); border-bottom: 2px solid var(--border); position: sticky; top: 0; z-index: 10; }
+.tab { flex: 1; padding: 10px 4px; text-align: center; cursor: pointer; font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); border-bottom: 3px solid transparent; transition: all 0.2s; }
+.tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+.tab:hover { background: var(--primary-light); }
+.content { max-width: 900px; margin: 0 auto; padding: 8px; }
+.loading { text-align: center; padding: 40px; color: var(--text-secondary); }
+.error { text-align: center; padding: 40px; color: #c62828; }
+.category-header { background: var(--primary); color: white; padding: 10px 16px; border-radius: 8px; margin: 4px 0; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+.category-header h3 { font-size: 0.95rem; }
+.category-header .info { font-size: 0.75rem; opacity: 0.85; }
+.category-header .arrow { transition: transform 0.2s; }
+.category-header.open .arrow { transform: rotate(180deg); }
+.category-content { display: none; }
+.category-content.open { display: block; }
+.round-chips { display: flex; gap: 4px; padding: 6px 0; flex-wrap: wrap; }
+.chip { padding: 4px 10px; border-radius: 16px; font-size: 0.75rem; cursor: pointer; border: 1px solid var(--border); background: var(--surface); }
+.chip.active { background: var(--primary); color: white; border-color: var(--primary); }
+.chip.live { font-weight: bold; }
+.chip.live.active { background: var(--primary-dark); }
+.game-row { display: flex; align-items: center; padding: 8px 12px; margin: 2px 0; border-radius: 6px; background: var(--surface); cursor: pointer; border: 1px solid var(--border); }
+.game-row:hover { background: var(--primary-light); }
+.game-row.in-progress { background: var(--live-bg); border-color: #ffb74d; }
+.game-row.namur { background: var(--namur-bg); border-color: #a5d6a7; }
+.game-row .table-nr { width: 24px; font-weight: bold; color: var(--text-secondary); font-size: 0.8rem; }
+.game-row .player { flex: 1; min-width: 0; }
+.game-row .player .name { font-size: 0.85rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.game-row .player .elo { font-size: 0.7rem; color: var(--text-secondary); }
+.game-row .player.namur-player .name { color: var(--namur-color); font-weight: bold; }
+.game-row .player.right { text-align: right; }
+.game-row .result { padding: 2px 8px; font-weight: bold; font-size: 0.8rem; min-width: 40px; text-align: center; }
+.game-row .result.live { color: var(--primary); background: rgba(21,101,192,0.1); border-radius: 4px; }
+.player-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; margin: 4px 0; overflow: hidden; }
+.player-card.namur { background: var(--namur-bg); border-color: #a5d6a7; }
+.player-card-header { padding: 8px 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+.player-card-header:hover { background: rgba(0,0,0,0.03); }
+.player-card-header .pname { font-weight: 600; font-size: 0.9rem; }
+.player-card-header .pname.namur { color: var(--namur-color); }
+.player-card-header .badge { font-size: 0.65rem; font-weight: bold; color: var(--namur-color); background: rgba(46,125,50,0.15); padding: 1px 6px; border-radius: 8px; margin-left: 6px; }
+.player-card-header .meta { font-size: 0.75rem; color: var(--text-secondary); }
+.player-rounds { display: none; padding: 0 12px 8px; }
+.player-rounds.open { display: block; }
+.round-row { display: flex; align-items: center; padding: 4px 0; font-size: 0.8rem; border-bottom: 1px solid var(--border); }
+.round-row:last-child { border-bottom: none; }
+.round-row .rnd { width: 28px; font-weight: bold; color: var(--text-secondary); }
+.round-row .white { flex: 1; }
+.round-row .rresult { width: 50px; text-align: center; font-weight: bold; }
+.round-row .black { flex: 1; text-align: right; }
+.round-row .opp-elo { font-size: 0.7rem; color: var(--text-secondary); }
+.ranking-row { display: flex; align-items: center; padding: 6px 12px; margin: 2px 0; border-radius: 6px; background: var(--surface); border: 1px solid var(--border); cursor: pointer; }
+.ranking-row.namur { background: var(--namur-bg); border-color: #a5d6a7; }
+.ranking-row .rank { width: 28px; font-weight: bold; font-size: 0.9rem; }
+.ranking-row .rank.top3 { color: var(--primary); }
+.ranking-row .rk-name { flex: 1; min-width: 0; }
+.ranking-row .rk-name .name { font-size: 0.85rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ranking-row .rk-name .name.namur { color: var(--namur-color); }
+.ranking-row .rk-elo { width: 45px; text-align: right; font-size: 0.8rem; color: var(--text-secondary); }
+.ranking-row .rk-pts { width: 50px; text-align: right; font-size: 0.8rem; font-weight: 600; }
+.ranking-row .rk-perf { width: 45px; text-align: right; font-size: 0.75rem; color: var(--text-secondary); }
+.tiebreaks { display: none; padding: 4px 12px 8px 40px; font-size: 0.75rem; color: var(--text-secondary); }
+.tiebreaks.open { display: block; }
+.news-link { display: block; padding: 12px 16px; margin: 4px 0; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; text-decoration: none; color: var(--text); }
+.news-link:hover { background: var(--primary-light); }
+.news-link h3 { font-size: 0.9rem; color: var(--primary); }
+.hidden { display: none; }
+@media (max-width: 600px) {
+  .tab { font-size: 0.65rem; padding: 8px 2px; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>CBJ 2026 - Namur</h1>
+  <small>Championnat de Belgique Jeunes d'échecs</small>
+</div>
+
+<div class="tabs">
+  <div class="tab active" data-tab="news">📰 News</div>
+  <div class="tab" data-tab="live">📡 Live</div>
+  <div class="tab" data-tab="namur">👥 Namur</div>
+  <div class="tab" data-tab="tous">👤 Tous</div>
+  <div class="tab" data-tab="classements">🏆 Classements</div>
+</div>
+
+<div class="content">
+  <div id="news" class="tab-content"></div>
+  <div id="live" class="tab-content hidden"></div>
+  <div id="namur" class="tab-content hidden"></div>
+  <div id="tous" class="tab-content hidden"></div>
+  <div id="classements" class="tab-content hidden"></div>
+</div>
+
+<script>
+const BYCCO_API = 'https://byccowebsiteprod.ew.r.appspot.com/api/v1/filestore/anon/file';
+const CHESS_COM_API = 'https://www.chess.com/callback/events';
+const EVENT_SUFFIX = '-bjk-cjb-bklm-2026';
+const CATEGORIES = ['u8','u10','u12','u14','u16','u18','u20'];
+const CLUB_NAMUR = '901';
+
+// Cache
+const cache = { bycco: {}, chesscom: {} };
+
+// --- Utilities ---
+function stripAccents(s) {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+function nameToWordSet(name) {
+  return new Set(stripAccents(name.toLowerCase()).replace(/,/g, ' ').trim().split(/\s+/).filter(Boolean));
+}
+function setsEqual(a, b) {
+  if (a.size !== b.size) return false;
+  for (const v of a) if (!b.has(v)) return false;
+  return true;
+}
+function namesMatch(a, b) {
+  return setsEqual(nameToWordSet(a), nameToWordSet(b));
+}
+function isNamur(player) {
+  return player.ClubNumber === CLUB_NAMUR;
+}
+
+// --- API Fetch ---
+async function fetchBycco(cat) {
+  if (cache.bycco[cat]) return cache.bycco[cat];
+  const res = await fetch(`${BYCCO_API}?group=trn&name=bjk_${cat}.json`);
+  const data = await res.json();
+  cache.bycco[cat] = data;
+  return data;
+}
+
+async function fetchChessCom(cat) {
+  if (cache.chesscom[cat]) return cache.chesscom[cat];
+  try {
+    const res = await fetch(`${CHESS_COM_API}/${cat}${EVENT_SUFFIX}`);
+    const data = await res.json();
+    cache.chesscom[cat] = data;
+    return data;
+  } catch(e) { return null; }
+}
+
+// --- Parse bycco players ---
+function parseByccoPlayers(data, cat, clubFilter) {
+  const players = data.Swar.Player;
+  const eloByName = {};
+  players.forEach(p => {
+    const name = p.Name || '';
+    eloByName[name] = Math.max(p.FideElo || 0, p.NationalElo || 0);
+  });
+
+  return players.filter(p => {
+    if (clubFilter && (p.ClubNumber || '') !== clubFilter) return false;
+    return (p.NationalId || '') !== '';
+  }).map(p => {
+    const pts = p.Points || 0;
+    const games = p.NbOfParts || 0;
+    const ptsStr = (pts === Math.floor(pts)) ? `${Math.floor(pts)}/${games}` : `${pts}/${games}`;
+    const name = p.Name || '';
+    const parts = name.split(',', 2);
+    const lastName = (parts[0] || '').trim();
+    const firstName = (parts[1] || '').trim();
+    const elo = Math.max(p.FideElo || 0, p.NationalElo || 0);
+    const ranking = p.Ranking || 0;
+    const performance = p.Performance || 0;
+    const tieBreaks = (p.TieBreak || []).filter(tb => tb.Type && tb.Points && tb.Points.trim() !== '-').map(tb => ({type: tb.Type, points: tb.Points.trim()}));
+
+    const rounds = (p.RoundArray || []).map(rd => {
+      const color = rd.Color || '';
+      const oppName = rd.OpponentName || '';
+      const oppElo = eloByName[oppName] || 0;
+      const tableNr = parseInt(rd.Tabel) || 0;
+      const roundNr = rd.RoundNr || 0;
+      const rawResult = rd.Result || '';
+
+      if (color !== 'White' && color !== 'Black') {
+        let resultStr = rawResult;
+        if (rawResult.includes('1')) resultStr = '1-0';
+        else if (rawResult.includes('½')) resultStr = '½-½';
+        return { roundNr, table: 0, white: name, whiteElo: elo, black: 'BYE', blackElo: 0, result: resultStr, isBye: true };
+      }
+
+      let resultStr;
+      if (color === 'White') {
+        resultStr = {'1':'1-0','0':'0-1','½':'½-½','1FF':'1-0 FF','0ff':'0-1 FF'}[rawResult] || rawResult;
+        return { roundNr, table: tableNr, white: name, whiteElo: elo, black: oppName, blackElo: oppElo, result: resultStr };
+      } else {
+        resultStr = {'1':'0-1','0':'1-0','½':'½-½','1FF':'0-1 FF','0ff':'1-0 FF'}[rawResult] || rawResult;
+        return { roundNr, table: tableNr, white: oppName, whiteElo: oppElo, black: name, blackElo: elo, result: resultStr };
+      }
+    }).sort((a,b) => a.roundNr - b.roundNr);
+
+    return { lastName, firstName, fullName: name, elo, matricule: p.NationalId, clubNumber: p.ClubNumber || '', category: cat.toUpperCase(), points: ptsStr, ranking, performance, tieBreaks, rounds };
+  });
+}
+
+// --- Tab switching ---
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+    tab.classList.add('active');
+    const id = tab.dataset.tab;
+    document.getElementById(id).classList.remove('hidden');
+    loadTab(id);
+  });
+});
+
+const loaded = {};
+function loadTab(id) {
+  if (loaded[id]) return;
+  loaded[id] = true;
+  switch(id) {
+    case 'news': loadNews(); break;
+    case 'live': loadLive(); break;
+    case 'namur': loadPlayers(CLUB_NAMUR); break;
+    case 'tous': loadPlayers(null); break;
+    case 'classements': loadRankings(); break;
+  }
+}
+
+// --- News ---
+function loadNews() {
+  document.getElementById('news').innerHTML = `
+    <div style="padding: 16px; text-align: center;">
+      <p style="margin-bottom: 16px; color: var(--text-secondary);">Articles du CBJ 2026 sur le site du club de Namur :</p>
+      <a href="https://www.namurechecs.net/fr/component/tags/tag/cbj" target="_blank" class="news-link">
+        <h3>📰 Voir tous les articles CBJ sur namurechecs.net</h3>
+        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 4px;">Ouvre dans un nouvel onglet</p>
+      </a>
+    </div>
+  `;
+}
+
+// --- Live ---
+async function loadLive() {
+  const container = document.getElementById('live');
+  container.innerHTML = '<div class="loading">Chargement des parties live...</div>';
+
+  const results = await Promise.all(CATEGORIES.map(async cat => {
+    const data = await fetchChessCom(cat);
+    if (!data || !data.event || !data.event.games) return { cat, games: [] };
+    const event = data.event;
+    const games = event.games || [];
+    const roundSlugs = {};
+    (event.rounds || []).forEach(r => { roundSlugs[r.id] = r.slug || ''; });
+    const roundIds = [...new Set(games.map(g => g.roundId))].sort((a,b) => a-b);
+    const roundNrMap = {};
+    roundIds.forEach((id, i) => { roundNrMap[id] = i + 1; });
+    return {
+      cat: cat.toUpperCase(),
+      games: games.map(g => ({
+        white: g.white?.name || '',
+        whiteElo: g.white?.elo || 0,
+        black: g.black?.name || '',
+        blackElo: g.black?.elo || 0,
+        result: g.result || '',
+        roundNr: roundNrMap[g.roundId] || 0,
+        table: g.table || 0,
+        slug: g.slug || '',
+        roundSlug: roundSlugs[g.roundId] || '',
+        category: cat
+      }))
+    };
+  }));
+
+  // Load Namur names from bycco
+  const namurSets = [];
+  await Promise.all(CATEGORIES.map(async cat => {
+    const data = await fetchBycco(cat);
+    data.Swar.Player.forEach(p => {
+      if (p.ClubNumber === CLUB_NAMUR && p.Name) namurSets.push(nameToWordSet(p.Name));
+    });
+  }));
+  function isNamurName(name) {
+    const ws = nameToWordSet(name);
+    return namurSets.some(s => setsEqual(s, ws));
+  }
+
+  const catOrder = ['U8','U10','U12','U14','U16','U18','U20'];
+  const sorted = results.filter(r => r.games.length > 0).sort((a,b) => catOrder.indexOf(a.cat) - catOrder.indexOf(b.cat));
+
+  if (sorted.length === 0) {
+    container.innerHTML = '<div class="loading">Aucune partie sur échiquier électronique</div>';
+    return;
+  }
+
+  let html = '';
+  sorted.forEach(({cat, games}) => {
+    const inProgress = games.filter(g => g.result === '*').length;
+    const finished = games.length - inProgress;
+    const info = [inProgress > 0 ? `${inProgress} en cours` : '', finished > 0 ? `${finished} terminée${finished>1?'s':''}` : ''].filter(Boolean).join(' · ');
+
+    html += `<div class="category-header" data-cat="live_${cat}"><div><h3>${cat}</h3><span class="info">${info}</span></div><span class="arrow">▼</span></div>`;
+    html += `<div class="category-content" id="live_${cat}">`;
+
+    const byRound = {};
+    games.forEach(g => { (byRound[g.roundNr] = byRound[g.roundNr] || []).push(g); });
+    const rounds = Object.keys(byRound).map(Number).sort((a,b) => a-b);
+
+    // Default to latest round with live games
+    let defaultRound = rounds[rounds.length - 1] || 1;
+    for (let i = rounds.length - 1; i >= 0; i--) {
+      if (byRound[rounds[i]].some(g => g.result === '*')) { defaultRound = rounds[i]; break; }
+    }
+
+    html += '<div class="round-chips">';
+    rounds.forEach(r => {
+      const hasLive = byRound[r].some(g => g.result === '*');
+      html += `<span class="chip${r===defaultRound?' active':''}${hasLive?' live':''}" data-round="${r}" data-cat-round="live_${cat}">R${r}</span>`;
+    });
+    html += '</div>';
+
+    rounds.forEach(r => {
+      const sorted = byRound[r].sort((a,b) => {
+        if (a.result === '*' && b.result !== '*') return -1;
+        if (a.result !== '*' && b.result === '*') return 1;
+        return a.table - b.table;
+      });
+      html += `<div class="round-games${r===defaultRound?'':' hidden'}" data-rg="live_${cat}_${r}">`;
+      sorted.forEach(g => {
+        const ip = g.result === '*';
+        const wNamur = isNamurName(g.white);
+        const bNamur = isNamurName(g.black);
+        const hasNamur = wNamur || bNamur;
+        const url = g.slug && g.roundSlug ? `https://www.chess.com/events/${g.category}${EVENT_SUFFIX}/${g.roundSlug}/${g.slug}` : '';
+        const cls = ip && hasNamur ? 'namur' : ip ? 'in-progress' : hasNamur ? 'namur' : '';
+        html += `<div class="game-row ${cls}" ${url ? `onclick="window.open('${url}','_blank')"` : ''}>`;
+        html += `<span class="table-nr">${g.table}</span>`;
+        html += `<div class="player${wNamur?' namur-player':''}"><div class="name">${g.white}</div>${g.whiteElo?`<div class="elo">${g.whiteElo}</div>`:''}</div>`;
+        html += `<span class="result${ip?' live':''}">${g.result}</span>`;
+        html += `<div class="player right${bNamur?' namur-player':''}"><div class="name">${g.black}</div>${g.blackElo?`<div class="elo">${g.blackElo}</div>`:''}</div>`;
+        html += '</div>';
+      });
+      html += '</div>';
+    });
+
+    html += '</div>';
+  });
+
+  container.innerHTML = html;
+
+  // Category toggle
+  container.querySelectorAll('.category-header').forEach(h => {
+    h.addEventListener('click', () => {
+      h.classList.toggle('open');
+      const content = document.getElementById(h.dataset.cat);
+      content.classList.toggle('open');
+    });
+  });
+
+  // Round chips
+  container.querySelectorAll('.chip').forEach(chip => {
+    chip.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const catRound = chip.dataset.catRound;
+      const round = chip.dataset.round;
+      container.querySelectorAll(`.chip[data-cat-round="${catRound}"]`).forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      container.querySelectorAll(`[data-rg^="${catRound}_"]`).forEach(rg => rg.classList.add('hidden'));
+      const target = container.querySelector(`[data-rg="${catRound}_${round}"]`);
+      if (target) target.classList.remove('hidden');
+    });
+  });
+}
+
+// --- Players (Namur / Tous) ---
+async function loadPlayers(clubFilter) {
+  const containerId = clubFilter ? 'namur' : 'tous';
+  const container = document.getElementById(containerId);
+  container.innerHTML = '<div class="loading">Chargement des joueurs...</div>';
+
+  const allPlayers = [];
+  await Promise.all(CATEGORIES.map(async cat => {
+    const data = await fetchBycco(cat);
+    const players = parseByccoPlayers(data, cat, clubFilter);
+    allPlayers.push(...players);
+  }));
+
+  // Group by category
+  const byCategory = {};
+  const catOrder = ['U8','U10','U12','U14','U16','U18','U20'];
+  allPlayers.forEach(p => {
+    (byCategory[p.category] = byCategory[p.category] || []).push(p);
+  });
+
+  // Sort
+  Object.values(byCategory).forEach(list => {
+    if (clubFilter) list.sort((a,b) => a.lastName.localeCompare(b.lastName));
+    else list.sort((a,b) => a.lastName.toLowerCase().localeCompare(b.lastName.toLowerCase()));
+  });
+
+  let html = '';
+  catOrder.filter(c => byCategory[c]).forEach(cat => {
+    const players = byCategory[cat];
+    const namurCount = players.filter(p => p.clubNumber === CLUB_NAMUR).length;
+    const prefix = containerId === 'namur' ? 'namur' : 'tous';
+
+    html += `<div class="category-header${clubFilter ? ' open' : ''}" data-cat="${prefix}_${cat}"><div><h3>${cat}</h3><span class="info">${players.length} joueurs${!clubFilter && namurCount ? ` · ${namurCount} Namur` : ''}</span></div><span class="arrow">▼</span></div>`;
+    html += `<div class="category-content${clubFilter ? ' open' : ''}" id="${prefix}_${cat}">`;
+
+    players.forEach((p, i) => {
+      const isN = p.clubNumber === CLUB_NAMUR;
+      html += `<div class="player-card${isN && !clubFilter ? ' namur' : ''}">`;
+      html += `<div class="player-card-header" data-player="${prefix}_${cat}_${i}">`;
+      html += `<div><span class="pname${isN ? ' namur' : ''}">${p.lastName}, ${p.firstName}</span>`;
+      if (isN && !clubFilter) html += `<span class="badge">Namur</span>`;
+      html += `</div><div class="meta">${p.elo} · ${p.points}</div></div>`;
+
+      html += `<div class="player-rounds" id="${prefix}_${cat}_${i}">`;
+      p.rounds.forEach(r => {
+        html += `<div class="round-row">`;
+        html += `<span class="rnd">R${r.roundNr}</span>`;
+        html += `<span class="white">${r.white}${r.whiteElo ? ` <span class="opp-elo">(${r.whiteElo})</span>` : ''}</span>`;
+        html += `<span class="rresult">${r.result}</span>`;
+        html += `<span class="black">${r.black}${r.blackElo ? ` <span class="opp-elo">(${r.blackElo})</span>` : ''}</span>`;
+        html += `</div>`;
+      });
+      html += '</div></div>';
+    });
+
+    html += '</div>';
+  });
+
+  container.innerHTML = html;
+
+  // Category toggle (only for "tous" mode)
+  container.querySelectorAll('.category-header').forEach(h => {
+    h.addEventListener('click', () => {
+      if (!clubFilter) {
+        h.classList.toggle('open');
+        document.getElementById(h.dataset.cat).classList.toggle('open');
+      }
+    });
+  });
+
+  // Player expand
+  container.querySelectorAll('.player-card-header').forEach(h => {
+    h.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const rounds = document.getElementById(h.dataset.player);
+      rounds.classList.toggle('open');
+    });
+  });
+}
+
+// --- Rankings ---
+async function loadRankings() {
+  const container = document.getElementById('classements');
+  container.innerHTML = '<div class="loading">Chargement des classements...</div>';
+
+  const allPlayers = [];
+  await Promise.all(CATEGORIES.map(async cat => {
+    const data = await fetchBycco(cat);
+    const players = parseByccoPlayers(data, cat, null);
+    allPlayers.push(...players);
+  }));
+
+  const byCategory = {};
+  allPlayers.forEach(p => { (byCategory[p.category] = byCategory[p.category] || []).push(p); });
+  Object.values(byCategory).forEach(list => list.sort((a,b) => (a.ranking || 999) - (b.ranking || 999)));
+
+  const catOrder = ['U8','U10','U12','U14','U16','U18','U20'];
+  let html = '';
+  catOrder.filter(c => byCategory[c]).forEach(cat => {
+    const players = byCategory[cat];
+    html += `<div class="category-header" data-cat="rk_${cat}"><div><h3>${cat}</h3><span class="info">${players.length} joueurs</span></div><span class="arrow">▼</span></div>`;
+    html += `<div class="category-content" id="rk_${cat}">`;
+
+    players.forEach((p, i) => {
+      const isN = p.clubNumber === CLUB_NAMUR;
+      html += `<div class="ranking-row${isN ? ' namur' : ''}" data-rkp="rk_${cat}_${i}">`;
+      html += `<span class="rank${p.ranking <= 3 ? ' top3' : ''}">${p.ranking || '-'}</span>`;
+      html += `<div class="rk-name"><div class="name${isN ? ' namur' : ''}">${p.lastName}, ${p.firstName}${isN ? ' <span style="font-size:0.65rem;color:var(--namur-color)">Namur</span>' : ''}</div></div>`;
+      html += `<span class="rk-elo">${p.elo || ''}</span>`;
+      html += `<span class="rk-pts">${p.points}</span>`;
+      html += `<span class="rk-perf">${p.performance || ''}</span>`;
+      html += '</div>';
+      html += `<div class="tiebreaks" id="rk_${cat}_${i}">`;
+      p.tieBreaks.forEach(tb => {
+        html += `<div>${tb.type}: ${tb.points}</div>`;
+      });
+      if (p.performance) html += `<div>Performance: ${p.performance}</div>`;
+      html += '</div>';
+    });
+
+    html += '</div>';
+  });
+
+  container.innerHTML = html;
+
+  container.querySelectorAll('.category-header').forEach(h => {
+    h.addEventListener('click', () => {
+      h.classList.toggle('open');
+      document.getElementById(h.dataset.cat).classList.toggle('open');
+    });
+  });
+
+  container.querySelectorAll('.ranking-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const tb = document.getElementById(row.dataset.rkp);
+      tb.classList.toggle('open');
+    });
+  });
+}
+
+// Load default tab
+loadTab('news');
+</script>
+</body>
+</html>
