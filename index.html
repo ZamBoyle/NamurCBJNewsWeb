@@ -121,9 +121,29 @@ const CHESS_COM_API = 'https://www.chess.com/callback/events';
 const EVENT_SUFFIX = '-bjk-cjb-bklm-2026';
 const CATEGORIES = ['u8','u10','u12','u14','u16','u18','u20'];
 const CLUB_NAMUR = '901';
+const CORS_PROXIES = [
+  url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
+];
 
 // Cache
 const cache = { bycco: {}, chesscom: {} };
+
+async function corsGet(url) {
+  // Try direct first
+  try {
+    const res = await fetch(url);
+    if (res.ok) return await res.json();
+  } catch(e) {}
+  // Try CORS proxies
+  for (const proxy of CORS_PROXIES) {
+    try {
+      const res = await fetch(proxy(url));
+      if (res.ok) return await res.json();
+    } catch(e) {}
+  }
+  return null;
+}
 
 // --- Utilities ---
 function stripAccents(s) {
@@ -147,20 +167,16 @@ function isNamur(player) {
 // --- API Fetch ---
 async function fetchBycco(cat) {
   if (cache.bycco[cat]) return cache.bycco[cat];
-  const res = await fetch(`${BYCCO_API}?group=trn&name=bjk_${cat}.json`);
-  const data = await res.json();
-  cache.bycco[cat] = data;
+  const data = await corsGet(`${BYCCO_API}?group=trn&name=bjk_${cat}.json`);
+  if (data) cache.bycco[cat] = data;
   return data;
 }
 
 async function fetchChessCom(cat) {
   if (cache.chesscom[cat]) return cache.chesscom[cat];
-  try {
-    const res = await fetch(`${CHESS_COM_API}/${cat}${EVENT_SUFFIX}`);
-    const data = await res.json();
-    cache.chesscom[cat] = data;
-    return data;
-  } catch(e) { return null; }
+  const data = await corsGet(`${CHESS_COM_API}/${cat}${EVENT_SUFFIX}`);
+  if (data) cache.chesscom[cat] = data;
+  return data;
 }
 
 // --- Parse bycco players ---
@@ -396,9 +412,16 @@ async function loadPlayers(clubFilter) {
   const allPlayers = [];
   await Promise.all(CATEGORIES.map(async cat => {
     const data = await fetchBycco(cat);
+    if (!data || !data.Swar) return;
     const players = parseByccoPlayers(data, cat, clubFilter);
     allPlayers.push(...players);
   }));
+
+  if (allPlayers.length === 0) {
+    container.innerHTML = '<div class="error">Impossible de charger les données. Réessayez.</div>';
+    loaded[containerId] = false;
+    return;
+  }
 
   // Group by category
   const byCategory = {};
@@ -475,9 +498,16 @@ async function loadRankings() {
   const allPlayers = [];
   await Promise.all(CATEGORIES.map(async cat => {
     const data = await fetchBycco(cat);
+    if (!data || !data.Swar) return;
     const players = parseByccoPlayers(data, cat, null);
     allPlayers.push(...players);
   }));
+
+  if (allPlayers.length === 0) {
+    container.innerHTML = '<div class="error">Impossible de charger les données. Réessayez.</div>';
+    loaded['classements'] = false;
+    return;
+  }
 
   const byCategory = {};
   allPlayers.forEach(p => { (byCategory[p.category] = byCategory[p.category] || []).push(p); });
