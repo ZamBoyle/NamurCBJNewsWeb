@@ -131,10 +131,20 @@ async function corsGet(url) {
     const res = await fetch(CORS_PROXY(url));
     if (res.ok) return await res.json();
   } catch(e) {}
-  // Fallback: try direct (works locally or if CORS is allowed)
   try {
     const res = await fetch(url);
     if (res.ok) return await res.json();
+  } catch(e) {}
+  return null;
+}
+async function corsGetHtml(url) {
+  try {
+    const res = await fetch(CORS_PROXY(url));
+    if (res.ok) return await res.text();
+  } catch(e) {}
+  try {
+    const res = await fetch(url);
+    if (res.ok) return await res.text();
   } catch(e) {}
   return null;
 }
@@ -271,16 +281,87 @@ function loadTab(id) {
 }
 
 // --- News ---
-function loadNews() {
-  document.getElementById('news').innerHTML = `
-    <div style="padding: 16px; text-align: center;">
-      <p style="margin-bottom: 16px; color: var(--text-secondary);">Articles du CBJ 2026 sur le site du club de Namur :</p>
-      <a href="https://www.namurechecs.net/fr/component/tags/tag/cbj" target="_blank" class="news-link">
-        <h3>📰 Voir tous les articles CBJ sur namurechecs.net</h3>
-        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 4px;">Ouvre dans un nouvel onglet</p>
-      </a>
-    </div>
-  `;
+const NEWS_BASE = 'https://www.namurechecs.net';
+const NEWS_TAG_URL = NEWS_BASE + '/fr/component/tags/tag/cbj?limit=100';
+const CBJ_2026_FIRST_ID = 1069;
+
+async function loadNews() {
+  const container = document.getElementById('news');
+  container.innerHTML = '<div class="loading">Chargement des articles...</div>';
+
+  const html = await corsGetHtml(NEWS_TAG_URL);
+  if (!html) {
+    container.innerHTML = `
+      <div style="padding: 16px; text-align: center;">
+        <p style="margin-bottom: 16px; color: var(--text-secondary);">Impossible de charger les articles. Consultez directement :</p>
+        <a href="${NEWS_TAG_URL}" target="_blank" class="news-link">
+          <h3>Voir les articles CBJ sur namurechecs.net</h3>
+        </a>
+      </div>`;
+    return;
+  }
+
+  // Parse article links from HTML
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+  const links = doc.querySelectorAll('a[href]');
+  const seen = new Set();
+  const rawArticles = [];
+
+  links.forEach(link => {
+    let href = link.getAttribute('href') || '';
+    if (href.startsWith('/')) href = NEWS_BASE + href;
+    if (!href.startsWith(NEWS_BASE)) return;
+    const slug = href.split('/').pop();
+    const m = slug.match(/^(\d+)-/);
+    if (!m) return;
+    if (seen.has(href)) return;
+    const title = link.textContent.trim();
+    if (!title || title.length < 5) return;
+    seen.add(href);
+    rawArticles.push({ id: parseInt(m[1]), title, url: href });
+  });
+
+  // Sort by ID ascending
+  rawArticles.sort((a, b) => a.id - b.id);
+
+  // Group into CBJ editions: each "Jour 1" starts a new edition
+  const editions = [];
+  for (const art of rawArticles) {
+    const isJour1 = /\bjour\s*1\b/i.test(art.title);
+    if (isJour1 || editions.length === 0) {
+      editions.push([art]);
+    } else {
+      editions[editions.length - 1].push(art);
+    }
+  }
+
+  // Find edition containing reference article (ID 1069 = CBJ 2026)
+  let refIdx = editions.findIndex(ed => ed.some(a => a.id === CBJ_2026_FIRST_ID));
+  if (refIdx === -1) refIdx = editions.length - 1;
+
+  // Assign years and keep only CBJ 2026
+  const articles2026 = [];
+  editions.forEach((edition, i) => {
+    const year = 2026 + (i - refIdx);
+    if (year === 2026) {
+      edition.forEach(a => articles2026.push({ ...a, year }));
+    }
+  });
+
+  // Display newest first
+  articles2026.sort((a, b) => b.id - a.id);
+
+  if (articles2026.length === 0) {
+    container.innerHTML = '<div class="loading">Aucun article CBJ 2026 trouvé</div>';
+    return;
+  }
+
+  let out = '';
+  articles2026.forEach(a => {
+    out += `<a href="${a.url}" target="_blank" class="news-link"><h3>${a.title}</h3></a>`;
+  });
+  container.innerHTML = out;
 }
 
 // --- Live ---
