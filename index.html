@@ -121,28 +121,40 @@ const CHESS_COM_API = 'https://www.chess.com/callback/events';
 const EVENT_SUFFIX = '-bjk-cjb-bklm-2026';
 const CATEGORIES = ['u8','u10','u12','u14','u16','u18','u20'];
 const CLUB_NAMUR = '901';
-const CORS_PROXIES = [
-  url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
-];
+const CORS_PROXY = url => `https://corsproxy.io/?${encodeURIComponent(url)}`;
 
 // Cache
 const cache = { bycco: {}, chesscom: {} };
 
 async function corsGet(url) {
-  // Try direct first
+  try {
+    const res = await fetch(CORS_PROXY(url));
+    if (res.ok) return await res.json();
+  } catch(e) {}
+  // Fallback: try direct (works locally or if CORS is allowed)
   try {
     const res = await fetch(url);
     if (res.ok) return await res.json();
   } catch(e) {}
-  // Try CORS proxies
-  for (const proxy of CORS_PROXIES) {
-    try {
-      const res = await fetch(proxy(url));
-      if (res.ok) return await res.json();
-    } catch(e) {}
-  }
   return null;
+}
+
+// Sequential fetch to avoid proxy rate-limiting
+async function fetchAllBycco() {
+  for (const cat of CATEGORIES) {
+    if (!cache.bycco[cat]) {
+      const data = await corsGet(`${BYCCO_API}?group=trn&name=bjk_${cat}.json`);
+      if (data) cache.bycco[cat] = data;
+    }
+  }
+}
+async function fetchAllChessCom() {
+  for (const cat of CATEGORIES) {
+    if (!cache.chesscom[cat]) {
+      const data = await corsGet(`${CHESS_COM_API}/${cat}${EVENT_SUFFIX}`);
+      if (data) cache.chesscom[cat] = data;
+    }
+  }
 }
 
 // --- Utilities ---
@@ -276,8 +288,10 @@ async function loadLive() {
   const container = document.getElementById('live');
   container.innerHTML = '<div class="loading">Chargement des parties live...</div>';
 
-  const results = await Promise.all(CATEGORIES.map(async cat => {
-    const data = await fetchChessCom(cat);
+  await fetchAllChessCom();
+
+  const results = CATEGORIES.map(cat => {
+    const data = cache.chesscom[cat];
     if (!data || !data.event || !data.event.games) return { cat, games: [] };
     const event = data.event;
     const games = event.games || [];
@@ -301,16 +315,18 @@ async function loadLive() {
         category: cat
       }))
     };
-  }));
+  });
 
   // Load Namur names from bycco
+  await fetchAllBycco();
   const namurSets = [];
-  await Promise.all(CATEGORIES.map(async cat => {
-    const data = await fetchBycco(cat);
+  CATEGORIES.forEach(cat => {
+    const data = cache.bycco[cat];
+    if (!data || !data.Swar) return;
     data.Swar.Player.forEach(p => {
       if (p.ClubNumber === CLUB_NAMUR && p.Name) namurSets.push(nameToWordSet(p.Name));
     });
-  }));
+  });
   function isNamurName(name) {
     const ws = nameToWordSet(name);
     return namurSets.some(s => setsEqual(s, ws));
@@ -409,13 +425,15 @@ async function loadPlayers(clubFilter) {
   const container = document.getElementById(containerId);
   container.innerHTML = '<div class="loading">Chargement des joueurs...</div>';
 
+  await fetchAllBycco();
+
   const allPlayers = [];
-  await Promise.all(CATEGORIES.map(async cat => {
-    const data = await fetchBycco(cat);
+  CATEGORIES.forEach(cat => {
+    const data = cache.bycco[cat];
     if (!data || !data.Swar) return;
     const players = parseByccoPlayers(data, cat, clubFilter);
     allPlayers.push(...players);
-  }));
+  });
 
   if (allPlayers.length === 0) {
     container.innerHTML = '<div class="error">Impossible de charger les données. Réessayez.</div>';
@@ -495,13 +513,15 @@ async function loadRankings() {
   const container = document.getElementById('classements');
   container.innerHTML = '<div class="loading">Chargement des classements...</div>';
 
+  await fetchAllBycco();
+
   const allPlayers = [];
-  await Promise.all(CATEGORIES.map(async cat => {
-    const data = await fetchBycco(cat);
+  CATEGORIES.forEach(cat => {
+    const data = cache.bycco[cat];
     if (!data || !data.Swar) return;
     const players = parseByccoPlayers(data, cat, null);
     allPlayers.push(...players);
-  }));
+  });
 
   if (allPlayers.length === 0) {
     container.innerHTML = '<div class="error">Impossible de charger les données. Réessayez.</div>';
