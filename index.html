@@ -92,6 +92,14 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .game-row.selected { outline: 2px solid var(--primary); outline-offset: -2px; }
 .multi-fab { display: none; position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: var(--primary); color: white; border: none; padding: 12px 24px; border-radius: 28px; font-size: 0.95rem; font-weight: bold; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 100; }
 .multi-fab.show { display: block; }
+.multi-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: #000; z-index: 200; flex-direction: column; }
+.multi-overlay.show { display: flex; }
+.multi-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 6px 12px; background: var(--primary-dark); color: white; flex-shrink: 0; }
+.multi-toolbar button { background: rgba(255,255,255,0.2); border: none; color: white; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 0.8rem; }
+.multi-toolbar button:hover { background: rgba(255,255,255,0.3); }
+.multi-frames { flex: 1; display: flex; gap: 2px; overflow: hidden; }
+.multi-frames.vertical { flex-direction: column; }
+.multi-frames iframe { flex: 1; border: none; min-width: 0; min-height: 0; background: #1a1a1a; }
 @media (max-width: 600px) {
   .tab { font-size: 0.65rem; padding: 8px 2px; }
 }
@@ -122,6 +130,16 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 
 <button class="multi-fab" id="multiFab" onclick="openMultiView()">Afficher (0)</button>
 
+<div class="multi-overlay" id="multiOverlay">
+  <div class="multi-toolbar">
+    <span id="multiTitle">Multi-Live</span>
+    <div>
+      <button onclick="toggleMultiLayout()">⇄ Disposition</button>
+      <button onclick="closeMultiView()">✕ Fermer</button>
+    </div>
+  </div>
+  <div class="multi-frames" id="multiFrames"></div>
+</div>
 
 <script>
 const BYCCO_API = 'https://byccowebsiteprod.ew.r.appspot.com/api/v1/filestore/anon/file';
@@ -135,7 +153,8 @@ const CORS_PROXY = url => `https://corsproxy.io/?${encodeURIComponent(url)}`;
 const cache = { bycco: {}, chesscom: {} };
 
 // Multi-live selection
-const selectedGames = new Map(); // key -> {url, label}
+const selectedGames = new Map(); // key -> {url, label, gameId}
+let multiLayoutHorizontal = true;
 
 function updateFab() {
   const fab = document.getElementById('multiFab');
@@ -144,15 +163,14 @@ function updateFab() {
   fab.classList.toggle('show', n > 0);
 }
 
-function toggleGameSelection(key, url, label, checkbox) {
+function toggleGameSelection(key, url, label, gameId, checkbox) {
   if (selectedGames.has(key)) {
     selectedGames.delete(key);
     checkbox.checked = false;
   } else {
-    selectedGames.set(key, { url, label });
+    selectedGames.set(key, { url, label, gameId });
     checkbox.checked = true;
   }
-  // Update row styling
   const row = checkbox.closest('.game-row');
   row.classList.toggle('selected', selectedGames.has(key));
   updateFab();
@@ -160,16 +178,31 @@ function toggleGameSelection(key, url, label, checkbox) {
 
 function openMultiView() {
   if (selectedGames.size === 0) return;
-  // chess.com blocks iframes (X-Frame-Options: SAMEORIGIN)
-  // Open each game in a separate tab instead
-  selectedGames.forEach(({ url }) => {
-    window.open(url, '_blank');
+  const overlay = document.getElementById('multiOverlay');
+  const frames = document.getElementById('multiFrames');
+  const title = document.getElementById('multiTitle');
+  title.textContent = `${selectedGames.size} partie${selectedGames.size > 1 ? 's' : ''}`;
+  frames.className = multiLayoutHorizontal ? 'multi-frames' : 'multi-frames vertical';
+  frames.innerHTML = '';
+  selectedGames.forEach(({ url, label, gameId }) => {
+    const iframe = document.createElement('iframe');
+    // Use /emboard?id= which allows iframe embedding (no X-Frame-Options)
+    iframe.src = `https://www.chess.com/emboard?id=${gameId}`;
+    iframe.title = label;
+    iframe.setAttribute('allowfullscreen', '');
+    frames.appendChild(iframe);
   });
-  // Clear selection after opening
-  selectedGames.clear();
-  document.querySelectorAll('.game-row.selected').forEach(r => r.classList.remove('selected'));
-  document.querySelectorAll('.game-row input[type="checkbox"]').forEach(cb => cb.checked = false);
-  updateFab();
+  overlay.classList.add('show');
+}
+
+function closeMultiView() {
+  document.getElementById('multiOverlay').classList.remove('show');
+  document.getElementById('multiFrames').innerHTML = '';
+}
+
+function toggleMultiLayout() {
+  multiLayoutHorizontal = !multiLayoutHorizontal;
+  document.getElementById('multiFrames').className = multiLayoutHorizontal ? 'multi-frames' : 'multi-frames vertical';
 }
 
 async function corsGet(url) {
@@ -430,6 +463,7 @@ async function loadLive() {
     return {
       cat: cat.toUpperCase(),
       games: games.map(g => ({
+        gameId: g.id || 0,
         white: g.white?.name || '',
         whiteElo: g.white?.elo || 0,
         black: g.black?.name || '',
@@ -509,7 +543,7 @@ async function loadLive() {
         const cls = ip && hasNamur ? 'namur' : ip ? 'in-progress' : hasNamur ? 'namur' : '';
         const key = `${g.category}_${g.roundNr}_${g.table}`;
         const label = `${g.white} vs ${g.black}`;
-        html += `<div class="game-row ${cls}" data-key="${key}" data-url="${url}" data-label="${label.replace(/"/g,'&quot;')}">`;
+        html += `<div class="game-row ${cls}" data-key="${key}" data-url="${url}" data-label="${label.replace(/"/g,'&quot;')}" data-gameid="${g.gameId}">`;
         if (url) html += `<span class="sel"><input type="checkbox" onclick="event.stopPropagation()" data-key="${key}"></span>`;
         html += `<span class="table-nr">${g.table}</span>`;
         html += `<div class="player${wNamur?' namur-player':''}"><div class="name">${g.white}</div>${g.whiteElo?`<div class="elo">${g.whiteElo}</div>`:''}</div>`;
@@ -553,12 +587,13 @@ async function loadLive() {
     const url = row.dataset.url;
     const key = row.dataset.key;
     const label = row.dataset.label;
+    const gameId = row.dataset.gameid;
     if (!url) return;
     const cb = row.querySelector('input[type="checkbox"]');
 
     cb.addEventListener('change', (e) => {
       e.stopPropagation();
-      toggleGameSelection(key, url, label, cb);
+      toggleGameSelection(key, url, label, gameId, cb);
     });
 
     row.addEventListener('click', (e) => {
