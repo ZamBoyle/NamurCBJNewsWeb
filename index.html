@@ -4,9 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CBJ 2026 - Namur</title>
-<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
-<link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
-<script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
 <style>
 :root {
   --primary: #1565c0;
@@ -100,32 +97,15 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .multi-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 6px 12px; background: var(--primary-dark); color: white; flex-shrink: 0; }
 .multi-toolbar button { background: rgba(255,255,255,0.2); border: none; color: white; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 0.8rem; }
 .multi-toolbar button:hover { background: rgba(255,255,255,0.3); }
-.multi-frames { flex: 1; display: flex; gap: 4px; overflow: auto; padding: 4px; flex-wrap: wrap; justify-content: center; align-items: flex-start; align-content: flex-start; }
-.multi-frames.vertical { flex-direction: column; flex-wrap: nowrap; align-items: center; }
-.board-card { background: #1e1e1e; border-radius: 8px; overflow: hidden; flex-shrink: 0; }
-.board-card .board-info { padding: 6px 8px; color: #fff; font-size: 0.75rem; }
-.board-card .board-info .bname { font-weight: 600; }
-.board-card .board-info .bname.namur { color: #66bb6a; }
-.board-card .board-info .belo { color: #aaa; font-size: 0.65rem; }
-.board-card .board-result { text-align: center; padding: 4px; color: #fff; font-weight: bold; font-size: 0.85rem; }
-.board-card .board-result.live { color: #ffb74d; }
-.single-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 200; justify-content: center; align-items: center; }
+.multi-frames { flex: 1; display: flex; gap: 2px; overflow: hidden; }
+.multi-frames.vertical { flex-direction: column; }
+.multi-frames iframe { flex: 1; border: none; min-width: 0; min-height: 0; background: #1a1a1a; }
+.single-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: #000; z-index: 200; flex-direction: column; }
 .single-overlay.show { display: flex; }
-.single-card { background: var(--surface); border-radius: 12px; max-width: 420px; width: 90%; overflow: hidden; }
-.single-card .sc-header { background: var(--primary); color: white; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; }
-.single-card .sc-header .sc-title { font-weight: bold; font-size: 0.95rem; }
-.single-card .sc-header button { background: none; border: none; color: white; font-size: 1.3rem; cursor: pointer; padding: 0 4px; }
-.single-card .sc-player { display: flex; justify-content: space-between; align-items: center; padding: 8px 14px; }
-.single-card .sc-player .sp-name { font-weight: 600; font-size: 0.9rem; }
-.single-card .sc-player .sp-name.namur { color: var(--namur-color); }
-.single-card .sc-player .sp-elo { font-size: 0.75rem; color: var(--text-secondary); }
-.single-card .sc-result { text-align: center; padding: 6px; font-weight: bold; font-size: 1.1rem; }
-.single-card .sc-result.live { color: var(--primary); }
-.single-card .sc-board { display: flex; justify-content: center; padding: 4px; }
-.single-card .sc-actions { display: flex; gap: 8px; padding: 10px 14px; justify-content: center; }
-.single-card .sc-actions a, .single-card .sc-actions button { padding: 8px 16px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer; text-decoration: none; border: none; }
-.single-card .sc-actions .sc-link { background: var(--primary); color: white; }
-.single-card .sc-actions .sc-close { background: var(--border); color: var(--text); }
+.single-card { display: flex; flex-direction: column; width: 100%; height: 100%; }
+.single-card .sc-header { background: var(--primary-dark); color: white; padding: 8px 14px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+.single-card .sc-header .sc-title { font-weight: bold; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.single-card .sc-header button { background: rgba(255,255,255,0.2); border: none; color: white; font-size: 0.85rem; cursor: pointer; padding: 6px 12px; border-radius: 4px; }
 @media (max-width: 600px) {
   .tab { font-size: 0.65rem; padding: 8px 2px; }
 }
@@ -185,8 +165,6 @@ const cache = { bycco: {}, chesscom: {} };
 // Multi-live selection
 const selectedGames = new Map(); // key -> {url, label, fen, white, welo, black, belo, result, wNamur, bNamur}
 let multiLayoutHorizontal = true;
-let multiBoardInstances = [];
-
 function updateFab() {
   const fab = document.getElementById('multiFab');
   const n = selectedGames.size;
@@ -216,57 +194,24 @@ function openMultiView() {
   title.textContent = `${n} partie${n > 1 ? 's' : ''}`;
   frames.className = multiLayoutHorizontal ? 'multi-frames' : 'multi-frames vertical';
   frames.innerHTML = '';
-  multiBoardInstances = [];
 
-  // Calculate board size based on number of games and screen size
-  const screenW = window.innerWidth;
-  const screenH = window.innerHeight - 44; // minus toolbar
-  let boardSize;
-  if (multiLayoutHorizontal) {
-    boardSize = Math.min(Math.floor(screenW / n) - 12, screenH - 80, 400);
-  } else {
-    boardSize = Math.min(Math.floor(screenH / n) - 60, screenW - 16, 400);
-  }
-  boardSize = Math.max(boardSize, 120);
+  // Get unique categories from selected games
+  const categories = new Set();
+  selectedGames.forEach(g => { if (g.category) categories.add(g.category); });
 
-  let idx = 0;
-  selectedGames.forEach((g, key) => {
-    const card = document.createElement('div');
-    card.className = 'board-card';
-    const isLive = g.result === '*';
-
-    card.innerHTML = `
-      <div class="board-info">
-        <span class="bname${g.wNamur ? ' namur' : ''}">${g.white}</span>
-        ${g.welo ? `<span class="belo">(${g.welo})</span>` : ''}
-      </div>
-      <div id="mboard-${idx}" style="width:${boardSize}px"></div>
-      <div class="board-info">
-        <span class="bname${g.bNamur ? ' namur' : ''}">${g.black}</span>
-        ${g.belo ? `<span class="belo">(${g.belo})</span>` : ''}
-      </div>
-      <div class="board-result${isLive ? ' live' : ''}">${isLive ? 'En cours' : g.result}</div>
-    `;
-    frames.appendChild(card);
-
-    const board = Chessboard('mboard-' + idx, {
-      position: g.fen || 'start',
-      draggable: false,
-      pieceTheme: 'https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/img/chesspieces/wikipedia/{piece}.png'
-    });
-    multiBoardInstances.push(board);
-    idx++;
+  categories.forEach(cat => {
+    const iframe = document.createElement('iframe');
+    iframe.src = `https://www.chess.com/events/embed/${cat}${EVENT_SUFFIX}`;
+    iframe.setAttribute('allowfullscreen', '');
+    frames.appendChild(iframe);
   });
 
   overlay.classList.add('show');
-  // Resize boards after display
-  setTimeout(() => multiBoardInstances.forEach(b => b.resize()), 100);
 }
 
 function closeMultiView() {
   document.getElementById('multiOverlay').classList.remove('show');
   document.getElementById('multiFrames').innerHTML = '';
-  multiBoardInstances = [];
 }
 
 function toggleMultiLayout() {
@@ -277,49 +222,25 @@ function toggleMultiLayout() {
 }
 
 // Single game view
-let singleBoardInstance = null;
-
 function openSingleView(gameData) {
   const overlay = document.getElementById('singleOverlay');
   const card = document.getElementById('singleCard');
-  const isLive = gameData.result === '*';
-  const boardSize = Math.min(window.innerWidth * 0.85, 380);
+  const embedUrl = `https://www.chess.com/events/embed/${gameData.category}${EVENT_SUFFIX}`;
 
   card.innerHTML = `
     <div class="sc-header">
       <span class="sc-title">${gameData.white} - ${gameData.black}</span>
       <button onclick="closeSingleView()">&times;</button>
     </div>
-    <div class="sc-player">
-      <span class="sp-name${gameData.wNamur ? ' namur' : ''}">${gameData.white}</span>
-      <span class="sp-elo">${gameData.welo || ''}</span>
-    </div>
-    <div class="sc-board"><div id="singleBoard" style="width:${boardSize}px"></div></div>
-    <div class="sc-player">
-      <span class="sp-name${gameData.bNamur ? ' namur' : ''}">${gameData.black}</span>
-      <span class="sp-elo">${gameData.belo || ''}</span>
-    </div>
-    <div class="sc-result${isLive ? ' live' : ''}">${isLive ? 'En cours' : gameData.result}</div>
-    <div class="sc-actions">
-      ${gameData.url ? `<a class="sc-link" href="${gameData.url}" target="_blank">Voir sur chess.com</a>` : ''}
-      <button class="sc-close" onclick="closeSingleView()">Fermer</button>
-    </div>
+    <iframe src="${embedUrl}" style="width:100%;height:100%;border:none;flex:1;"></iframe>
   `;
 
   overlay.classList.add('show');
-
-  singleBoardInstance = Chessboard('singleBoard', {
-    position: gameData.fen || 'start',
-    draggable: false,
-    pieceTheme: 'https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/img/chesspieces/wikipedia/{piece}.png'
-  });
-  setTimeout(() => { if (singleBoardInstance) singleBoardInstance.resize(); }, 100);
 }
 
 function closeSingleView() {
   document.getElementById('singleOverlay').classList.remove('show');
   document.getElementById('singleCard').innerHTML = '';
-  singleBoardInstance = null;
 }
 
 async function corsGet(url) {
@@ -661,7 +582,7 @@ async function loadLive() {
         const cls = ip && hasNamur ? 'namur' : ip ? 'in-progress' : hasNamur ? 'namur' : '';
         const key = `${g.category}_${g.roundNr}_${g.table}`;
         const label = `${g.white} vs ${g.black}`;
-        html += `<div class="game-row ${cls}" data-key="${key}" data-url="${url}" data-white="${g.white.replace(/"/g,'&quot;')}" data-black="${g.black.replace(/"/g,'&quot;')}" data-fen="${(g.currentFEN||'').replace(/"/g,'&quot;')}" data-welo="${g.whiteElo}" data-belo="${g.blackElo}" data-result="${g.result}" data-wnamur="${wNamur}" data-bnamur="${bNamur}">`;
+        html += `<div class="game-row ${cls}" data-key="${key}" data-url="${url}" data-category="${g.category}" data-white="${g.white.replace(/"/g,'&quot;')}" data-black="${g.black.replace(/"/g,'&quot;')}" data-result="${g.result}" data-wnamur="${wNamur}" data-bnamur="${bNamur}">`;
         if (url) html += `<span class="sel"><input type="checkbox" onclick="event.stopPropagation()" data-key="${key}"></span>`;
         html += `<span class="table-nr">${g.table}</span>`;
         html += `<div class="player${wNamur?' namur-player':''}"><div class="name">${g.white}</div>${g.whiteElo?`<div class="elo">${g.whiteElo}</div>`:''}</div>`;
@@ -707,8 +628,7 @@ async function loadLive() {
     if (!url) return;
     const cb = row.querySelector('input[type="checkbox"]');
     const gameData = {
-      url, white: row.dataset.white, black: row.dataset.black,
-      fen: row.dataset.fen, welo: row.dataset.welo, belo: row.dataset.belo,
+      url, category: row.dataset.category, white: row.dataset.white, black: row.dataset.black,
       result: row.dataset.result, wNamur: row.dataset.wnamur === 'true', bNamur: row.dataset.bnamur === 'true'
     };
 
