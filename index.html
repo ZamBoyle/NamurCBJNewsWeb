@@ -92,7 +92,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .game-row .sel { width: 20px; display: flex; align-items: center; margin-right: 4px; }
 .game-row .sel input { width: 16px; height: 16px; cursor: pointer; accent-color: var(--primary); }
 .game-row.selected { outline: 2px solid var(--primary); outline-offset: -2px; }
-.multi-fab { display: none; position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: var(--primary); color: white; border: none; padding: 12px 24px; border-radius: 28px; font-size: 0.95rem; font-weight: bold; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 100; }
+.multi-fab { display: none; position: fixed; top: 52px; left: 50%; transform: translateX(-50%); background: var(--primary); color: white; border: none; padding: 12px 24px; border-radius: 28px; font-size: 0.95rem; font-weight: bold; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 100; }
 .multi-fab.show { display: block; }
 .multi-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: #000; z-index: 200; flex-direction: column; }
 .multi-overlay.show { display: flex; }
@@ -287,8 +287,11 @@ async function fetchAllBycco() {
 async function fetchAllChessCom() {
   for (const cat of CATEGORIES) {
     if (!cache.chesscom[cat]) {
-      const data = await corsGet(`${CHESS_COM_API}/${cat}${EVENT_SUFFIX}`);
-      if (data) cache.chesscom[cat] = data;
+      const url = `${CHESS_PROXY}/callback/events/${cat}${EVENT_SUFFIX}`;
+      try {
+        const res = await fetch(url);
+        if (res.ok) { const data = await res.json(); if (data) cache.chesscom[cat] = data; }
+      } catch(e) {}
     }
   }
 }
