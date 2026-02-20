@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CBJ 2026 - Namur</title>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
+<script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
 <style>
 :root {
   --primary: #1565c0;
@@ -97,9 +100,15 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .multi-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 6px 12px; background: var(--primary-dark); color: white; flex-shrink: 0; }
 .multi-toolbar button { background: rgba(255,255,255,0.2); border: none; color: white; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 0.8rem; }
 .multi-toolbar button:hover { background: rgba(255,255,255,0.3); }
-.multi-frames { flex: 1; display: flex; gap: 2px; overflow: hidden; }
-.multi-frames.vertical { flex-direction: column; }
-.multi-frames iframe { flex: 1; border: none; min-width: 0; min-height: 0; background: #1a1a1a; }
+.multi-frames { flex: 1; display: flex; gap: 4px; overflow: auto; padding: 4px; flex-wrap: wrap; justify-content: center; align-items: flex-start; align-content: flex-start; }
+.multi-frames.vertical { flex-direction: column; flex-wrap: nowrap; align-items: center; }
+.board-card { background: #1e1e1e; border-radius: 8px; overflow: hidden; flex-shrink: 0; }
+.board-card .board-info { padding: 6px 8px; color: #fff; font-size: 0.75rem; }
+.board-card .board-info .bname { font-weight: 600; }
+.board-card .board-info .bname.namur { color: #66bb6a; }
+.board-card .board-info .belo { color: #aaa; font-size: 0.65rem; }
+.board-card .board-result { text-align: center; padding: 4px; color: #fff; font-weight: bold; font-size: 0.85rem; }
+.board-card .board-result.live { color: #ffb74d; }
 @media (max-width: 600px) {
   .tab { font-size: 0.65rem; padding: 8px 2px; }
 }
@@ -153,8 +162,9 @@ const CORS_PROXY = url => `https://corsproxy.io/?${encodeURIComponent(url)}`;
 const cache = { bycco: {}, chesscom: {} };
 
 // Multi-live selection
-const selectedGames = new Map(); // key -> {url, label, gameId}
+const selectedGames = new Map(); // key -> {url, label, fen, white, welo, black, belo, result, wNamur, bNamur}
 let multiLayoutHorizontal = true;
+let multiBoardInstances = [];
 
 function updateFab() {
   const fab = document.getElementById('multiFab');
@@ -163,12 +173,12 @@ function updateFab() {
   fab.classList.toggle('show', n > 0);
 }
 
-function toggleGameSelection(key, url, label, gameId, checkbox) {
+function toggleGameSelection(key, gameData, checkbox) {
   if (selectedGames.has(key)) {
     selectedGames.delete(key);
     checkbox.checked = false;
   } else {
-    selectedGames.set(key, { url, label, gameId });
+    selectedGames.set(key, gameData);
     checkbox.checked = true;
   }
   const row = checkbox.closest('.game-row');
@@ -181,28 +191,69 @@ function openMultiView() {
   const overlay = document.getElementById('multiOverlay');
   const frames = document.getElementById('multiFrames');
   const title = document.getElementById('multiTitle');
-  title.textContent = `${selectedGames.size} partie${selectedGames.size > 1 ? 's' : ''}`;
+  const n = selectedGames.size;
+  title.textContent = `${n} partie${n > 1 ? 's' : ''}`;
   frames.className = multiLayoutHorizontal ? 'multi-frames' : 'multi-frames vertical';
   frames.innerHTML = '';
-  selectedGames.forEach(({ url, label, gameId }) => {
-    const iframe = document.createElement('iframe');
-    // Use /emboard?id= which allows iframe embedding (no X-Frame-Options)
-    iframe.src = `https://www.chess.com/emboard?id=${gameId}`;
-    iframe.title = label;
-    iframe.setAttribute('allowfullscreen', '');
-    frames.appendChild(iframe);
+  multiBoardInstances = [];
+
+  // Calculate board size based on number of games and screen size
+  const screenW = window.innerWidth;
+  const screenH = window.innerHeight - 44; // minus toolbar
+  let boardSize;
+  if (multiLayoutHorizontal) {
+    boardSize = Math.min(Math.floor(screenW / n) - 12, screenH - 80, 400);
+  } else {
+    boardSize = Math.min(Math.floor(screenH / n) - 60, screenW - 16, 400);
+  }
+  boardSize = Math.max(boardSize, 120);
+
+  let idx = 0;
+  selectedGames.forEach((g, key) => {
+    const card = document.createElement('div');
+    card.className = 'board-card';
+    const isLive = g.result === '*';
+
+    card.innerHTML = `
+      <div class="board-info">
+        <span class="bname${g.wNamur ? ' namur' : ''}">${g.white}</span>
+        ${g.welo ? `<span class="belo">(${g.welo})</span>` : ''}
+      </div>
+      <div id="mboard-${idx}" style="width:${boardSize}px"></div>
+      <div class="board-info">
+        <span class="bname${g.bNamur ? ' namur' : ''}">${g.black}</span>
+        ${g.belo ? `<span class="belo">(${g.belo})</span>` : ''}
+      </div>
+      <div class="board-result${isLive ? ' live' : ''}">${isLive ? 'En cours' : g.result}</div>
+    `;
+    frames.appendChild(card);
+
+    const board = Chessboard('mboard-' + idx, {
+      position: g.fen || 'start',
+      draggable: false,
+      pieceTheme: 'https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/img/chesspieces/wikipedia/{piece}.png'
+    });
+    multiBoardInstances.push(board);
+    idx++;
   });
+
   overlay.classList.add('show');
+  // Resize boards after display
+  setTimeout(() => multiBoardInstances.forEach(b => b.resize()), 100);
 }
 
 function closeMultiView() {
   document.getElementById('multiOverlay').classList.remove('show');
   document.getElementById('multiFrames').innerHTML = '';
+  multiBoardInstances = [];
 }
 
 function toggleMultiLayout() {
   multiLayoutHorizontal = !multiLayoutHorizontal;
   document.getElementById('multiFrames').className = multiLayoutHorizontal ? 'multi-frames' : 'multi-frames vertical';
+  // Re-render with new layout
+  closeMultiView();
+  openMultiView();
 }
 
 async function corsGet(url) {
@@ -469,6 +520,7 @@ async function loadLive() {
         black: g.black?.name || '',
         blackElo: g.black?.elo || 0,
         result: g.result || '',
+        currentFEN: g.currentFEN || '',
         roundNr: roundNrMap[g.roundId] || 0,
         table: g.table || 0,
         slug: g.slug || '',
@@ -543,7 +595,7 @@ async function loadLive() {
         const cls = ip && hasNamur ? 'namur' : ip ? 'in-progress' : hasNamur ? 'namur' : '';
         const key = `${g.category}_${g.roundNr}_${g.table}`;
         const label = `${g.white} vs ${g.black}`;
-        html += `<div class="game-row ${cls}" data-key="${key}" data-url="${url}" data-label="${label.replace(/"/g,'&quot;')}" data-gameid="${g.gameId}">`;
+        html += `<div class="game-row ${cls}" data-key="${key}" data-url="${url}" data-white="${g.white.replace(/"/g,'&quot;')}" data-black="${g.black.replace(/"/g,'&quot;')}" data-fen="${(g.currentFEN||'').replace(/"/g,'&quot;')}" data-welo="${g.whiteElo}" data-belo="${g.blackElo}" data-result="${g.result}" data-wnamur="${wNamur}" data-bnamur="${bNamur}">`;
         if (url) html += `<span class="sel"><input type="checkbox" onclick="event.stopPropagation()" data-key="${key}"></span>`;
         html += `<span class="table-nr">${g.table}</span>`;
         html += `<div class="player${wNamur?' namur-player':''}"><div class="name">${g.white}</div>${g.whiteElo?`<div class="elo">${g.whiteElo}</div>`:''}</div>`;
@@ -586,14 +638,17 @@ async function loadLive() {
   container.querySelectorAll('.game-row').forEach(row => {
     const url = row.dataset.url;
     const key = row.dataset.key;
-    const label = row.dataset.label;
-    const gameId = row.dataset.gameid;
     if (!url) return;
     const cb = row.querySelector('input[type="checkbox"]');
+    const gameData = {
+      url, white: row.dataset.white, black: row.dataset.black,
+      fen: row.dataset.fen, welo: row.dataset.welo, belo: row.dataset.belo,
+      result: row.dataset.result, wNamur: row.dataset.wnamur === 'true', bNamur: row.dataset.bnamur === 'true'
+    };
 
     cb.addEventListener('change', (e) => {
       e.stopPropagation();
-      toggleGameSelection(key, url, label, gameId, cb);
+      toggleGameSelection(key, gameData, cb);
     });
 
     row.addEventListener('click', (e) => {
