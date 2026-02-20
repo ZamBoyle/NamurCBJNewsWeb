@@ -193,7 +193,8 @@ function toggleGameSelection(key, gameData, checkbox) {
 }
 
 function toProxyUrl(chessComUrl) {
-  return chessComUrl.replace('https://www.chess.com', CHESS_PROXY);
+  const proxied = chessComUrl.replace('https://www.chess.com', CHESS_PROXY);
+  return proxied + (proxied.includes('?') ? '&' : '?') + '_t=' + Date.now();
 }
 
 function openMultiView() {
