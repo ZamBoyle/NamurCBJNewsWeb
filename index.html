@@ -4,9 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CBJ 2026 - Namur</title>
-<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
-<link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
-<script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
 <style>
 :root {
   --primary: #1565c0;
@@ -100,32 +97,17 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .multi-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 6px 12px; background: var(--primary-dark); color: white; flex-shrink: 0; }
 .multi-toolbar button { background: rgba(255,255,255,0.2); border: none; color: white; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 0.8rem; }
 .multi-toolbar button:hover { background: rgba(255,255,255,0.3); }
-.multi-frames { flex: 1; display: flex; gap: 4px; overflow: auto; padding: 4px; flex-wrap: wrap; justify-content: center; align-items: flex-start; align-content: flex-start; }
-.multi-frames.vertical { flex-direction: column; flex-wrap: nowrap; align-items: center; }
-.board-card { background: #1e1e1e; border-radius: 8px; overflow: hidden; flex-shrink: 0; }
-.board-card .board-info { padding: 6px 8px; color: #fff; font-size: 0.75rem; display: flex; justify-content: space-between; }
-.board-card .board-info .bname { font-weight: 600; }
-.board-card .board-info .bname.namur { color: #66bb6a; }
-.board-card .board-info .belo { color: #aaa; font-size: 0.65rem; }
-.board-card .board-result { text-align: center; padding: 4px; color: #fff; font-weight: bold; font-size: 0.85rem; }
-.board-card .board-result.live { color: #ffb74d; }
-.board-card .board-link { text-align: center; padding: 4px 8px 8px; }
-.board-card .board-link a { color: #90caf9; font-size: 0.7rem; text-decoration: none; }
-.board-card .board-link a:hover { text-decoration: underline; }
-.single-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 200; justify-content: center; align-items: center; }
+.multi-frames { flex: 1; display: flex; gap: 2px; overflow: hidden; }
+.multi-frames.vertical { flex-direction: column; }
+.multi-frames iframe { flex: 1; border: none; min-width: 0; min-height: 0; background: #1a1a1a; }
+.single-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: #000; z-index: 200; flex-direction: column; }
 .single-overlay.show { display: flex; }
-.single-card { background: #1e1e1e; border-radius: 12px; max-width: 420px; width: 92%; overflow: hidden; }
-.single-card .sc-player { display: flex; justify-content: space-between; align-items: center; padding: 8px 14px; color: #fff; }
-.single-card .sc-player .sp-name { font-weight: 600; font-size: 0.9rem; }
-.single-card .sc-player .sp-name.namur { color: #66bb6a; }
-.single-card .sc-player .sp-elo { font-size: 0.75rem; color: #aaa; }
-.single-card .sc-board { display: flex; justify-content: center; padding: 0 8px; }
-.single-card .sc-result { text-align: center; padding: 6px; font-weight: bold; font-size: 1.1rem; color: #fff; }
-.single-card .sc-result.live { color: #ffb74d; }
-.single-card .sc-actions { display: flex; gap: 8px; padding: 10px 14px; justify-content: center; }
-.single-card .sc-actions a, .single-card .sc-actions button { padding: 8px 16px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer; text-decoration: none; border: none; }
-.single-card .sc-actions .sc-link { background: var(--primary); color: white; }
-.single-card .sc-actions .sc-close { background: #444; color: #fff; }
+.single-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 6px 12px; background: var(--primary-dark); color: white; flex-shrink: 0; }
+.single-toolbar .st-info { font-size: 0.85rem; font-weight: 600; }
+.single-toolbar .st-info .namur { color: #66bb6a; }
+.single-toolbar button { background: rgba(255,255,255,0.2); border: none; color: white; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 0.8rem; }
+.single-toolbar button:hover { background: rgba(255,255,255,0.3); }
+.single-overlay iframe { flex: 1; border: none; width: 100%; background: #1a1a1a; }
 @media (max-width: 600px) {
   .tab { font-size: 0.65rem; padding: 8px 2px; }
 }
@@ -156,8 +138,12 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 
 <button class="multi-fab" id="multiFab" onclick="openMultiView()">Afficher (0)</button>
 
-<div class="single-overlay" id="singleOverlay" onclick="if(event.target===this)closeSingleView()">
-  <div class="single-card" id="singleCard"></div>
+<div class="single-overlay" id="singleOverlay">
+  <div class="single-toolbar">
+    <span class="st-info" id="singleInfo"></span>
+    <button onclick="closeSingleView()">✕ Fermer</button>
+  </div>
+  <iframe id="singleFrame" src="about:blank"></iframe>
 </div>
 
 <div class="multi-overlay" id="multiOverlay">
@@ -174,6 +160,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 <script>
 const BYCCO_API = 'https://byccowebsiteprod.ew.r.appspot.com/api/v1/filestore/anon/file';
 const CHESS_COM_API = 'https://www.chess.com/callback/events';
+const CHESS_PROXY = 'https://chess-proxy.johnny-piette.workers.dev';
 const EVENT_SUFFIX = '-bjk-cjb-bklm-2026';
 const CATEGORIES = ['u8','u10','u12','u14','u16','u18','u20'];
 const CLUB_NAMUR = 901;
@@ -205,7 +192,9 @@ function toggleGameSelection(key, gameData, checkbox) {
   updateFab();
 }
 
-let multiBoardInstances = [];
+function toProxyUrl(chessComUrl) {
+  return chessComUrl.replace('https://www.chess.com', CHESS_PROXY);
+}
 
 function openMultiView() {
   if (selectedGames.size === 0) return;
@@ -216,54 +205,21 @@ function openMultiView() {
   title.textContent = `${n} partie${n > 1 ? 's' : ''}`;
   frames.className = multiLayoutHorizontal ? 'multi-frames' : 'multi-frames vertical';
   frames.innerHTML = '';
-  multiBoardInstances = [];
 
-  const screenW = window.innerWidth;
-  const screenH = window.innerHeight - 44;
-  let boardSize;
-  if (multiLayoutHorizontal) {
-    boardSize = Math.min(Math.floor(screenW / n) - 16, screenH - 100, 400);
-  } else {
-    boardSize = Math.min(Math.floor(screenH / n) - 70, screenW - 20, 400);
-  }
-  boardSize = Math.max(boardSize, 120);
-
-  let idx = 0;
   selectedGames.forEach((g) => {
-    const card = document.createElement('div');
-    card.className = 'board-card';
-    const isLive = g.result === '*';
-    card.innerHTML = `
-      <div class="board-info">
-        <span class="bname${g.wNamur ? ' namur' : ''}">${g.white}</span>
-        <span class="belo">${g.welo || ''}</span>
-      </div>
-      <div id="mboard-${idx}" style="width:${boardSize}px"></div>
-      <div class="board-info">
-        <span class="bname${g.bNamur ? ' namur' : ''}">${g.black}</span>
-        <span class="belo">${g.belo || ''}</span>
-      </div>
-      <div class="board-result${isLive ? ' live' : ''}">${isLive ? 'En cours' : g.result}</div>
-      ${g.url ? `<div class="board-link"><a href="${g.url}" target="_blank">Voir sur chess.com</a></div>` : ''}
-    `;
-    frames.appendChild(card);
-    const board = Chessboard('mboard-' + idx, {
-      position: g.fen || 'start',
-      draggable: false,
-      pieceTheme: 'https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/img/chesspieces/wikipedia/{piece}.png'
-    });
-    multiBoardInstances.push(board);
-    idx++;
+    if (!g.url) return;
+    const iframe = document.createElement('iframe');
+    iframe.src = toProxyUrl(g.url);
+    iframe.allow = 'fullscreen';
+    frames.appendChild(iframe);
   });
 
   overlay.classList.add('show');
-  setTimeout(() => multiBoardInstances.forEach(b => b.resize()), 100);
 }
 
 function closeMultiView() {
   document.getElementById('multiOverlay').classList.remove('show');
   document.getElementById('multiFrames').innerHTML = '';
-  multiBoardInstances = [];
 }
 
 function toggleMultiLayout() {
@@ -274,44 +230,23 @@ function toggleMultiLayout() {
 }
 
 // Single game view
-let singleBoardInstance = null;
-
 function openSingleView(g) {
+  if (!g.url) return;
   const overlay = document.getElementById('singleOverlay');
-  const card = document.getElementById('singleCard');
-  const isLive = g.result === '*';
-  const boardSize = Math.min(window.innerWidth * 0.82, 380);
+  const info = document.getElementById('singleInfo');
+  const frame = document.getElementById('singleFrame');
 
-  card.innerHTML = `
-    <div class="sc-player">
-      <span class="sp-name${g.wNamur ? ' namur' : ''}">${g.white}</span>
-      <span class="sp-elo">${g.welo || ''}</span>
-    </div>
-    <div class="sc-board"><div id="singleBoard" style="width:${boardSize}px"></div></div>
-    <div class="sc-player">
-      <span class="sp-name${g.bNamur ? ' namur' : ''}">${g.black}</span>
-      <span class="sp-elo">${g.belo || ''}</span>
-    </div>
-    <div class="sc-result${isLive ? ' live' : ''}">${isLive ? 'En cours' : g.result}</div>
-    <div class="sc-actions">
-      ${g.url ? `<a class="sc-link" href="${g.url}" target="_blank">Voir sur chess.com</a>` : ''}
-      <button class="sc-close" onclick="closeSingleView()">Fermer</button>
-    </div>
-  `;
+  const wName = g.wNamur ? `<span class="namur">${g.white}</span>` : g.white;
+  const bName = g.bNamur ? `<span class="namur">${g.black}</span>` : g.black;
+  info.innerHTML = `${wName} vs ${bName}`;
 
+  frame.src = toProxyUrl(g.url);
   overlay.classList.add('show');
-  singleBoardInstance = Chessboard('singleBoard', {
-    position: g.fen || 'start',
-    draggable: false,
-    pieceTheme: 'https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/img/chesspieces/wikipedia/{piece}.png'
-  });
-  setTimeout(() => { if (singleBoardInstance) singleBoardInstance.resize(); }, 100);
 }
 
 function closeSingleView() {
   document.getElementById('singleOverlay').classList.remove('show');
-  document.getElementById('singleCard').innerHTML = '';
-  singleBoardInstance = null;
+  document.getElementById('singleFrame').src = 'about:blank';
 }
 
 async function corsGet(url) {
