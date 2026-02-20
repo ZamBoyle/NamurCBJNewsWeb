@@ -109,6 +109,23 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .board-card .board-info .belo { color: #aaa; font-size: 0.65rem; }
 .board-card .board-result { text-align: center; padding: 4px; color: #fff; font-weight: bold; font-size: 0.85rem; }
 .board-card .board-result.live { color: #ffb74d; }
+.single-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 200; justify-content: center; align-items: center; }
+.single-overlay.show { display: flex; }
+.single-card { background: var(--surface); border-radius: 12px; max-width: 420px; width: 90%; overflow: hidden; }
+.single-card .sc-header { background: var(--primary); color: white; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; }
+.single-card .sc-header .sc-title { font-weight: bold; font-size: 0.95rem; }
+.single-card .sc-header button { background: none; border: none; color: white; font-size: 1.3rem; cursor: pointer; padding: 0 4px; }
+.single-card .sc-player { display: flex; justify-content: space-between; align-items: center; padding: 8px 14px; }
+.single-card .sc-player .sp-name { font-weight: 600; font-size: 0.9rem; }
+.single-card .sc-player .sp-name.namur { color: var(--namur-color); }
+.single-card .sc-player .sp-elo { font-size: 0.75rem; color: var(--text-secondary); }
+.single-card .sc-result { text-align: center; padding: 6px; font-weight: bold; font-size: 1.1rem; }
+.single-card .sc-result.live { color: var(--primary); }
+.single-card .sc-board { display: flex; justify-content: center; padding: 4px; }
+.single-card .sc-actions { display: flex; gap: 8px; padding: 10px 14px; justify-content: center; }
+.single-card .sc-actions a, .single-card .sc-actions button { padding: 8px 16px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer; text-decoration: none; border: none; }
+.single-card .sc-actions .sc-link { background: var(--primary); color: white; }
+.single-card .sc-actions .sc-close { background: var(--border); color: var(--text); }
 @media (max-width: 600px) {
   .tab { font-size: 0.65rem; padding: 8px 2px; }
 }
@@ -138,6 +155,10 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 </div>
 
 <button class="multi-fab" id="multiFab" onclick="openMultiView()">Afficher (0)</button>
+
+<div class="single-overlay" id="singleOverlay" onclick="if(event.target===this)closeSingleView()">
+  <div class="single-card" id="singleCard"></div>
+</div>
 
 <div class="multi-overlay" id="multiOverlay">
   <div class="multi-toolbar">
@@ -251,9 +272,54 @@ function closeMultiView() {
 function toggleMultiLayout() {
   multiLayoutHorizontal = !multiLayoutHorizontal;
   document.getElementById('multiFrames').className = multiLayoutHorizontal ? 'multi-frames' : 'multi-frames vertical';
-  // Re-render with new layout
   closeMultiView();
   openMultiView();
+}
+
+// Single game view
+let singleBoardInstance = null;
+
+function openSingleView(gameData) {
+  const overlay = document.getElementById('singleOverlay');
+  const card = document.getElementById('singleCard');
+  const isLive = gameData.result === '*';
+  const boardSize = Math.min(window.innerWidth * 0.85, 380);
+
+  card.innerHTML = `
+    <div class="sc-header">
+      <span class="sc-title">${gameData.white} - ${gameData.black}</span>
+      <button onclick="closeSingleView()">&times;</button>
+    </div>
+    <div class="sc-player">
+      <span class="sp-name${gameData.wNamur ? ' namur' : ''}">${gameData.white}</span>
+      <span class="sp-elo">${gameData.welo || ''}</span>
+    </div>
+    <div class="sc-board"><div id="singleBoard" style="width:${boardSize}px"></div></div>
+    <div class="sc-player">
+      <span class="sp-name${gameData.bNamur ? ' namur' : ''}">${gameData.black}</span>
+      <span class="sp-elo">${gameData.belo || ''}</span>
+    </div>
+    <div class="sc-result${isLive ? ' live' : ''}">${isLive ? 'En cours' : gameData.result}</div>
+    <div class="sc-actions">
+      ${gameData.url ? `<a class="sc-link" href="${gameData.url}" target="_blank">Voir sur chess.com</a>` : ''}
+      <button class="sc-close" onclick="closeSingleView()">Fermer</button>
+    </div>
+  `;
+
+  overlay.classList.add('show');
+
+  singleBoardInstance = Chessboard('singleBoard', {
+    position: gameData.fen || 'start',
+    draggable: false,
+    pieceTheme: 'https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/img/chesspieces/wikipedia/{piece}.png'
+  });
+  setTimeout(() => { if (singleBoardInstance) singleBoardInstance.resize(); }, 100);
+}
+
+function closeSingleView() {
+  document.getElementById('singleOverlay').classList.remove('show');
+  document.getElementById('singleCard').innerHTML = '';
+  singleBoardInstance = null;
 }
 
 async function corsGet(url) {
@@ -653,7 +719,7 @@ async function loadLive() {
 
     row.addEventListener('click', (e) => {
       if (e.target.tagName === 'INPUT') return;
-      window.open(url, '_blank');
+      openSingleView(gameData);
     });
   });
 }
